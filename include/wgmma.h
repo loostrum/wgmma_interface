@@ -1,3 +1,5 @@
+#include "wgmma_fp16_fp32.h"
+
 namespace wgmma {
 
   static constexpr size_t WARPGROUP_SIZE = 128;
@@ -19,7 +21,7 @@ namespace wgmma {
     unsigned long descriptor;
   };
 
-  inline __host__ __device__ unsigned long make_descriptor(unsigned start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
+  inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
 
   Descriptor desc;
   desc.bits.start_address = (start_address & 0x3FFFF) >> 4;
@@ -29,6 +31,25 @@ namespace wgmma {
   desc.bits.swizzle_mode = swizzle_mode & 0x3;
 
   return desc.descriptor;
-}
+  }
+
+  inline __device__ void arrive() {
+    asm("wgmma.fence.sync.aligned;\n\t"
+        "fence.proxy.async;");
+  }
+
+  inline __device__ void commit() {
+    asm("wgmma.commit_group.sync.aligned;");
+  }
+
+  inline __device__ void wait() {
+    asm("wgmma.wait_group.sync.aligned 0;");
+  }
+
+  template<bool scaleD>
+  inline __device__ void set_scaleD() {
+      asm(".reg .pred p;\n\t"
+          "setp.ne.b32 p, %0, 0;" :: "n"(scaleD));
+  }
 
 }  // end namespace wgmma
