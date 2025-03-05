@@ -34,22 +34,19 @@ namespace wgmma {
   }
 
   inline __device__ void arrive() {
-    asm("wgmma.fence.sync.aligned;\n\t"
-        "fence.proxy.async;");
+    //asm("wgmma.fence.sync.aligned;\n\t"
+    //    "fence.proxy.async;");
+    asm("wgmma.fence.sync.aligned;");
   }
 
   inline __device__ void commit() {
     asm("wgmma.commit_group.sync.aligned;");
   }
 
+  template<unsigned N>
   inline __device__ void wait() {
-    asm("wgmma.wait_group.sync.aligned 0;");
-  }
-
-  template<bool scaleD>
-  inline __device__ void set_scaleD() {
-      asm(".reg .pred p;\n\t"
-          "setp.ne.b32 p, %0, 0;" :: "n"(scaleD));
+    static_assert(0 < N < 8, "N must be between 0 and 7");
+    asm("wgmma.wait_group.sync.aligned %0;" :: "n"(N));
   }
 
 }  // end namespace wgmma

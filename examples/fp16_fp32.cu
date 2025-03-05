@@ -53,7 +53,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 
     float c[N/2] = {0};
 
-    unsigned lds = 2048;
+    unsigned lds = 2 * N * 8; // 2048
     unsigned sds = 128;
     wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
     unsigned base_offset = 0;
@@ -61,15 +61,13 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 
     unsigned long descB = wgmma::make_descriptor(addr, lds, sds, base_offset, swizzle);
 
-
-    wgmma::set_scaleD<1>();
     for (size_t repeat=0; repeat < REPEAT_COUNT; repeat++) {
         wgmma::arrive();
         for (size_t counter = 0; counter < WGMMA_COUNT; counter++) {
             wgmma::wgmma_async(a, descB, c);
         }
         wgmma::commit();
-        wgmma::wait();
+        wgmma::wait<0>();
     }
 
     wgmma::store_matrix(c, C, N);
@@ -82,7 +80,7 @@ int main() {
     constexpr unsigned K = 16;
     constexpr unsigned REPEAT_COUNT = 256;
     constexpr unsigned WGMMA_COUNT = 16;
-    constexpr unsigned ITERATIONS = 8;
+    constexpr unsigned ITERATIONS = 16;
 
     cu::init();
     cu::Device device(0);
@@ -141,7 +139,7 @@ int main() {
             if (diff != 0) errs++;
         }
     }
-    std::cout << std::endl << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
+    std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
 
     // benchmark
     int multiProcessorCount = device.getAttribute(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
