@@ -1,5 +1,7 @@
 #include <cuda_fp16.h>
 
+#include "wgmma_common.h"
+
 namespace wgmma {
 
   // 64x128x16
