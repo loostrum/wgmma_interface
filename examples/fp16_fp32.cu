@@ -78,7 +78,7 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 256;
+    constexpr unsigned REPEAT_COUNT = 1024;
     constexpr unsigned WGMMA_COUNT = 16;
     constexpr unsigned ITERATIONS = 16;
 

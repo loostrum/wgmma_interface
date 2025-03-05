@@ -12,6 +12,10 @@ namespace wgmma {
   enum MemOrder { row_major,
                   col_major};
 
+  enum Matrix {matrix_a,
+               matrix_b,
+               accumulator};
+
   union Descriptor {
     struct {
       unsigned short start_address : 14, : 2;
@@ -24,9 +28,12 @@ namespace wgmma {
     unsigned long descriptor;
   };
 
-  template<unsigned M, unsigned N, unsigned K, typename T, enum MemOrder>
-  class Fragment {
+  template<typename T, unsigned N>
+  struct Storage {
+    T x[N];
   };
+
+  template<unsigned M, unsigned N, unsigned K, typename T, MemOrder mem_order> class fragment;
 
   inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
 
@@ -41,9 +48,8 @@ namespace wgmma {
   }
 
   inline __device__ void arrive() {
-    //asm("wgmma.fence.sync.aligned;\n\t"
-    //    "fence.proxy.async;");
-    asm("wgmma.fence.sync.aligned;");
+    asm("wgmma.fence.sync.aligned;\n\t"
+        "fence.proxy.async;");
   }
 
   inline __device__ void commit() {

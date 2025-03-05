@@ -4,6 +4,9 @@
 
 namespace wgmma {
 
+  template<> class fragment<64, 128, 16, half, wgmma::row_major> : public Storage<int, 4> {};
+
+
   // 64x128x16
   inline __device__ void load_matrix_a(int (&a)[4], const half *A, const size_t K) {
     size_t laneid = threadIdx.x % 128;
