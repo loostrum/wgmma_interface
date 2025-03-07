@@ -29,9 +29,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     wgmma::fragment<wgmma::matrix_a, M, N, K, half, wgmma::row_major> a;
     __shared__ __align__(16) wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
     wgmma::fragment<wgmma::accumulator, M, N, K, float> c;
-    for (auto &item : c.x) {
-        item = 0;
-    }
+    wgmma::fill_fragment(c, 0);
 
     wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
 

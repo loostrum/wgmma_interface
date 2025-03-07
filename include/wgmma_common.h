@@ -60,6 +60,13 @@ namespace wgmma {
     return desc.descriptor;
   }
 
+  template <class Frag, typename T>
+  inline __device__ void fill_fragment(Frag &frag, const T value) {
+    for (auto &item : frag.x) {
+      item = value;
+    }
+  }
+
   inline __device__ void smem_fence() {
     // the async proxy fence is required between writing to shared memory and reading that shared memory in an
     // wgmma.mma_async instruction
