@@ -81,7 +81,7 @@ namespace wgmma {
 
   template<unsigned N=0>
   inline __device__ void wait() {
-    // N is the amount of wgmma instruction that is still allowed to be pending
+    // N is the amount of wgmma instruction groups that is still allowed to be pending
     asm("wgmma.wait_group.sync.aligned %0;" :: "n"(N));
   }
 
