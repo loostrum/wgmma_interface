@@ -26,12 +26,13 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     const size_t nthreads = blockDim.x * blockDim.y * blockDim.z;
     const size_t tid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
 
-    wgmma::fragment<M, N, K, half, wgmma::row_major> a;
-    wgmma::load_matrix_sync(a, A, K);
+    wgmma::fragment<wgmma::matrix_a, M, N, K, half, wgmma::row_major> a;
+    // wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
 
-    const size_t numB = N * K;
-    __shared__ __align__(16) half b[numB];
-    for (size_t idx=tid; idx < numB; idx += nthreads) {
+    wgmma::load_matrix(a, A, K);
+    __shared__ __align__(16) half b[N*K];
+    // wgmma::load_matrix(b, B, K, tid, nthreads);
+    for (size_t idx=tid; idx < N*K; idx += nthreads) {
         const size_t core_matrix_N = 8;
         const size_t core_matrix_K = 8;
         // no swizzle means core matrices have to have adjacent elements
@@ -42,7 +43,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         // calculate output index. First get index of core matrix
         size_t core_matrix_n = n / core_matrix_N;
         size_t core_matrix_k = k / core_matrix_K;
-        size_t core_matrix_index = core_matrix_k * (N / core_matrix_N) + core_matrix_n;  // n-major!
+        size_t core_matrix_index = core_matrix_k * (128 / core_matrix_N) + core_matrix_n;  // n-major!
         size_t core_matrix_start = core_matrix_index * core_matrix_N * core_matrix_K; // start position of this core matrix
         size_t core_n = n % core_matrix_N;
         size_t core_k = k % core_matrix_K;
@@ -65,7 +66,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     for (size_t repeat=0; repeat < REPEAT_COUNT; repeat++) {
         wgmma::arrive();
         for (size_t counter = 0; counter < WGMMA_COUNT; counter++) {
-            wgmma::wgmma_async(a, descB, c);
+            wgmma::mma_async(a, descB, c);
         }
         wgmma::commit();
         wgmma::wait();
@@ -79,9 +80,9 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 1024;
-    constexpr unsigned WGMMA_COUNT = 16;
-    constexpr unsigned ITERATIONS = 8;
+    constexpr unsigned REPEAT_COUNT = 64;
+    constexpr unsigned WGMMA_COUNT = 8;
+    constexpr unsigned ITERATIONS = 4;
 
     cu::init();
     cu::Device device(0);

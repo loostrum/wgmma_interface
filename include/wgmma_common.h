@@ -31,16 +31,15 @@ namespace wgmma {
   template<typename T, unsigned N>
   struct Storage {
     T x[N];
-
-    __device__ operator T*() {
-      return &x[0];
-    }
   };
 
-  template<unsigned M, unsigned N, unsigned K, typename T, MemOrder mem_order> class fragment;
+  template<Matrix matrix, unsigned M, unsigned N, unsigned K, typename T, MemOrder mem_order> class fragment;
 
   template<class Frag, typename T>
-  inline __device__ void load_matrix_sync(Frag &frag, const T *A, const size_t ldm);
+  inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm);
+
+  template<class Frag, typename T>
+  inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm, const size_t tid, const size_t nthreads);
 
   inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
 
