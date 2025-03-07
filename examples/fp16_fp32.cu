@@ -28,13 +28,15 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 
     wgmma::fragment<wgmma::matrix_a, M, N, K, half, wgmma::row_major> a;
     __shared__ __align__(16) wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
+    wgmma::fragment<wgmma::accumulator, M, N, K, float> c;
+    for (auto &item : c.x) {
+        item = 0;
+    }
 
     wgmma::load_matrix(a, A, K);
     wgmma::load_matrix(b, B, K, tid, nthreads);
     __syncthreads();
     wgmma::smem_fence();
-
-    float c[N/2] = {0};
 
     unsigned lds = 2 * N * 8; // 2048
     unsigned sds = 128;
@@ -53,7 +55,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         wgmma::wait();
     }
 
-    wgmma::store_matrix(c, C, N);
+    wgmma::store_matrix(c, C, N, wgmma::mem_row_major);
 }
 
 

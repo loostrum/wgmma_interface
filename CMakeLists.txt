@@ -33,5 +33,6 @@ foreach(wgmma_example IN LISTS WGMMA_EXAMPLES)
     if(WGMMA_KEEP_INTERMEDIATES)
         target_compile_options(wgmma_${wgmma_example} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--keep>)
     endif()
+    target_compile_options(wgmma_${wgmma_example} PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Wno-deprecated-declarations>)
 
 endforeach()

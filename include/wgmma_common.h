@@ -9,12 +9,14 @@ namespace wgmma {
                      B64,
                      B32};
 
-  enum MemOrder { row_major,
-                  col_major};
+  enum Layout { mem_row_major = 0,
+                mem_col_major};
 
-  enum Matrix {matrix_a,
-               matrix_b,
-               accumulator};
+  struct row_major {};
+  struct col_major {};
+  struct matrix_a {};
+  struct matrix_b {};
+  struct accumulator {};
 
   union Descriptor {
     struct {
@@ -33,7 +35,7 @@ namespace wgmma {
     T x[N];
   };
 
-  template<Matrix matrix, unsigned M, unsigned N, unsigned K, typename T, MemOrder mem_order> class fragment;
+  template<typename matrixT, unsigned M, unsigned N, unsigned K, typename T, typename LayoutT=void> class fragment;
 
   template<class Frag, typename T>
   inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm);
@@ -41,16 +43,21 @@ namespace wgmma {
   template<class Frag, typename T>
   inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm, const size_t tid, const size_t nthreads);
 
+  template<class Frag, typename T>
+  inline __device__ void store_matrix(const Frag &c, T *C, const size_t ldm, const unsigned mem_order);
+
+  template<class FragA, class FragC>
+  inline __device__ void mma_async(const FragA &a, const unsigned long descB, FragC &c);
+
   inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
+    Descriptor desc;
+    desc.bits.start_address = (start_address & 0x3FFFF) >> 4;
+    desc.bits.leading_dimension_byte_offset = (leading_dimension_offset & 0x3FFFF) >> 4;
+    desc.bits.stride_dimension_byte_offset = (stride_dimension_offset & 0x3FFFF) >> 4;
+    desc.bits.matrix_base_offset = matrix_base_offset & 0x7;
+    desc.bits.swizzle_mode = swizzle_mode & 0x3;
 
-  Descriptor desc;
-  desc.bits.start_address = (start_address & 0x3FFFF) >> 4;
-  desc.bits.leading_dimension_byte_offset = (leading_dimension_offset & 0x3FFFF) >> 4;
-  desc.bits.stride_dimension_byte_offset = (stride_dimension_offset & 0x3FFFF) >> 4;
-  desc.bits.matrix_base_offset = matrix_base_offset & 0x7;
-  desc.bits.swizzle_mode = swizzle_mode & 0x3;
-
-  return desc.descriptor;
+    return desc.descriptor;
   }
 
   inline __device__ void smem_fence() {
