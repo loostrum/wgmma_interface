@@ -33,14 +33,16 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         item = 0;
     }
 
+    wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
+
     wgmma::load_matrix(a, A, K);
-    wgmma::load_matrix(b, B, K, tid, nthreads);
+    wgmma::load_matrix(b, B, K, swizzle, tid, nthreads);
     __syncthreads();
     wgmma::smem_fence();
 
     unsigned lds = 2 * N * 8; // 2048
     unsigned sds = 128;
-    wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
+
     unsigned base_offset = 0;
     unsigned long addr = reinterpret_cast<unsigned long>(&b.x[0]);
 

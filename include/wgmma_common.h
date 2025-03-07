@@ -41,7 +41,7 @@ namespace wgmma {
   inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm);
 
   template<class Frag, typename T>
-  inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm, const size_t tid, const size_t nthreads);
+  inline __device__ void load_matrix(Frag &frag, const T *A, const size_t ldm, const unsigned swizzle_mode, const size_t tid, const size_t nthreads);
 
   template<class Frag, typename T>
   inline __device__ void store_matrix(const Frag &c, T *C, const size_t ldm, const unsigned mem_order);

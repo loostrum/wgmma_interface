@@ -4,12 +4,12 @@
 
 namespace wgmma {
 
+  // 64x128x16
   template<> class fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> : public Storage<int, 4> {};
   template<> class fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> : public Storage<half, 128*16 /* N*K */> {};
   template<> class fragment<wgmma::accumulator, 64, 128, 16, float> : public Storage<float, 64 /* N/2 */> {};
 
-  // 64x128x16
-  // A
+
   template<> inline __device__ void load_matrix(fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> &frag, const half *A, const size_t ldm) {
     size_t laneid = threadIdx.x % 128;
     size_t first_row = laneid / 4 + 8 * (laneid / 32);
@@ -26,8 +26,9 @@ namespace wgmma {
     reinterpret_cast<half2 *>(frag.x)[3] = __halves2half2(A[idx], A[idx+1]);
   }
 
-  // B
-  template<> inline __device__ void load_matrix(fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const half *B, const size_t ldm, const size_t tid, const size_t nthreads) {
+  template<> inline __device__ void load_matrix(fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const half *B, const size_t ldm, const unsigned swizzle_mode, const size_t tid, const size_t nthreads) {
+    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return;
+
     for (size_t idx=tid; idx < 128*16; idx += nthreads) {
       const size_t core_matrix_N = 8;
       const size_t core_matrix_K = 8;
