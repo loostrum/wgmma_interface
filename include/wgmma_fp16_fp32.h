@@ -5,10 +5,7 @@
 namespace wgmma {
 
   template<> class fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> : public Storage<int, 4> {};
-  template<> __shared__ __align__(16)  class fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> {
-    public:
-      half x[128*16];
-  };
+  template<> class fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> : public Storage<half, 128*16> {};
 
   // 64x128x16
   // A

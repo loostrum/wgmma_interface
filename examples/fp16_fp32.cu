@@ -27,29 +27,10 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     const size_t tid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
 
     wgmma::fragment<wgmma::matrix_a, M, N, K, half, wgmma::row_major> a;
-    // wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
+    __shared__ __align__(16) wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
 
     wgmma::load_matrix(a, A, K);
-    __shared__ __align__(16) half b[N*K];
-    // wgmma::load_matrix(b, B, K, tid, nthreads);
-    for (size_t idx=tid; idx < N*K; idx += nthreads) {
-        const size_t core_matrix_N = 8;
-        const size_t core_matrix_K = 8;
-        // no swizzle means core matrices have to have adjacent elements
-        // like the ccglib transpose kernel: tiles are contiguous in memory
-        // B matrix is N x K, K major i.e. contiguous in K
-        size_t n = idx / K;
-        size_t k = idx % K;
-        // calculate output index. First get index of core matrix
-        size_t core_matrix_n = n / core_matrix_N;
-        size_t core_matrix_k = k / core_matrix_K;
-        size_t core_matrix_index = core_matrix_k * (128 / core_matrix_N) + core_matrix_n;  // n-major!
-        size_t core_matrix_start = core_matrix_index * core_matrix_N * core_matrix_K; // start position of this core matrix
-        size_t core_n = n % core_matrix_N;
-        size_t core_k = k % core_matrix_K;
-        size_t out_idx = core_matrix_start + core_n * core_matrix_K + core_k;
-        b[out_idx] = B[idx];
-    }
+    wgmma::load_matrix(b, B, K, tid, nthreads);
     __syncthreads();
     wgmma::smem_fence();
 
@@ -59,7 +40,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     unsigned sds = 128;
     wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
     unsigned base_offset = 0;
-    unsigned long addr = reinterpret_cast<unsigned long>(&b[0]);
+    unsigned long addr = reinterpret_cast<unsigned long>(&b.x[0]);
 
     unsigned long descB = wgmma::make_descriptor(addr, lds, sds, base_offset, swizzle);
 
@@ -80,8 +61,8 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 64;
-    constexpr unsigned WGMMA_COUNT = 8;
+    constexpr unsigned REPEAT_COUNT = 4;
+    constexpr unsigned WGMMA_COUNT = 4;
     constexpr unsigned ITERATIONS = 4;
 
     cu::init();
