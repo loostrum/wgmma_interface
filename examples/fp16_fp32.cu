@@ -26,8 +26,8 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     const size_t nthreads = blockDim.x * blockDim.y * blockDim.z;
     const size_t tid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
 
-    int a[4];
-    wgmma::load_matrix_a(a, A, K);
+    wgmma::fragment<M, N, K, half, wgmma::row_major> a;
+    wgmma::load_matrix_sync(a, A, K);
 
     const size_t numB = N * K;
     __shared__ __align__(16) half b[numB];
@@ -50,6 +50,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         b[out_idx] = B[idx];
     }
     __syncthreads();
+    wgmma::smem_fence();
 
     float c[N/2] = {0};
 
@@ -67,7 +68,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
             wgmma::wgmma_async(a, descB, c);
         }
         wgmma::commit();
-        wgmma::wait<0>();
+        wgmma::wait();
     }
 
     wgmma::store_matrix(c, C, N);
@@ -80,7 +81,7 @@ int main() {
     constexpr unsigned K = 16;
     constexpr unsigned REPEAT_COUNT = 1024;
     constexpr unsigned WGMMA_COUNT = 16;
-    constexpr unsigned ITERATIONS = 16;
+    constexpr unsigned ITERATIONS = 8;
 
     cu::init();
     cu::Device device(0);
@@ -94,7 +95,7 @@ int main() {
     size_t bytes_b = sizeof(half) * N * K;
     size_t bytes_c = sizeof(float) * M * N;
 
-    half *a, *b; 
+    half *a, *b;
     float *c, *c_ref, *c_ref_host;
     cudaMallocHost(&a, bytes_a);
     cudaMallocHost(&b, bytes_b);
@@ -110,14 +111,14 @@ int main() {
 
     for (size_t i = 0; i < M * K; i++) {
         a[i] = (half)generator();
-    }   
+    }
 
     for (size_t i = 0; i < N * K; i++) {
         b[i] = (half)generator();
-    }   
+    }
 
-    dim3 threads_ref{32, 32, 1}; 
-    dim3 grid_ref{M / threads_ref.x + 1, N / threads_ref.y + 1, 1}; 
+    dim3 threads_ref{32, 32, 1};
+    dim3 grid_ref{M / threads_ref.x + 1, N / threads_ref.y + 1, 1};
 
     cudaMemcpy(d_a, a, bytes_a, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, b, bytes_b, cudaMemcpyHostToDevice);
@@ -125,8 +126,8 @@ int main() {
     cudaDeviceSynchronize();
     cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
-    dim3 threads{128, 1, 1}; 
-    dim3 grid{1, 1, 1}; 
+    dim3 threads{128, 1, 1};
+    dim3 grid{1, 1, 1};
     cudaMemset(d_c, 0, bytes_c);
     kernel_wgmma<M, N, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
     cudaDeviceSynchronize();
@@ -161,7 +162,7 @@ int main() {
         double perf = gops / time; // time in ms converts giga to tera
         tflops[i] = perf;
         std::cout << "TFLOPS: " << perf << std::endl;
-    } 
+    }
     double tflops_avg = 0;
     double tflops_sq = 0;
     for (auto & item : tflops) {
@@ -180,4 +181,3 @@ int main() {
     cudaFree(d_a);
     cudaFree(d_b);
 }
-

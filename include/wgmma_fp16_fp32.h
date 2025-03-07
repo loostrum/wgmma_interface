@@ -8,20 +8,20 @@ namespace wgmma {
 
 
   // 64x128x16
-  inline __device__ void load_matrix_a(int (&a)[4], const half *A, const size_t K) {
+  template<> inline __device__ void load_matrix_sync(fragment<64, 128, 16, half, wgmma::row_major> &frag, const half *A, const size_t ldm) {
     size_t laneid = threadIdx.x % 128;
     size_t first_row = laneid / 4 + 8 * (laneid / 32);
     size_t first_col = 2 * (laneid % 4);
     size_t idx;
 
-    idx = first_row * K + first_col;
-    reinterpret_cast<half2 *>(a)[0] = __halves2half2(A[idx], A[idx+1]);
-    idx = (first_row + 8) * K + first_col;
-    reinterpret_cast<half2 *>(a)[1] = __halves2half2(A[idx], A[idx+1]);
-    idx = first_row * K + (first_col + 8);
-    reinterpret_cast<half2 *>(a)[2] = __halves2half2(A[idx], A[idx+1]);
-    idx = (first_row + 8) * K + (first_col + 8);
-    reinterpret_cast<half2 *>(a)[3] = __halves2half2(A[idx], A[idx+1]);
+    idx = first_row * ldm + first_col;
+    reinterpret_cast<half2 *>(frag.x)[0] = __halves2half2(A[idx], A[idx+1]);
+    idx = (first_row + 8) * ldm + first_col;
+    reinterpret_cast<half2 *>(frag.x)[1] = __halves2half2(A[idx], A[idx+1]);
+    idx = first_row * ldm + (first_col + 8);
+    reinterpret_cast<half2 *>(frag.x)[2] = __halves2half2(A[idx], A[idx+1]);
+    idx = (first_row + 8) * ldm + (first_col + 8);
+    reinterpret_cast<half2 *>(frag.x)[3] = __halves2half2(A[idx], A[idx+1]);
   }
 
   //template<size_t N>

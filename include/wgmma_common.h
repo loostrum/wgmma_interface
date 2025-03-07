@@ -31,9 +31,16 @@ namespace wgmma {
   template<typename T, unsigned N>
   struct Storage {
     T x[N];
+
+    __device__ operator T*() {
+      return &x[0];
+    }
   };
 
   template<unsigned M, unsigned N, unsigned K, typename T, MemOrder mem_order> class fragment;
+
+  template<class Frag, typename T>
+  inline __device__ void load_matrix_sync(Frag &frag, const T *A, const size_t ldm);
 
   inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
 
@@ -47,18 +54,28 @@ namespace wgmma {
   return desc.descriptor;
   }
 
+  inline __device__ void smem_fence() {
+    // the async proxy fence is required between writing to shared memory and reading that shared memory in an
+    // wgmma.mma_async instruction
+    asm("fence.proxy.async;");
+  }
+
   inline __device__ void arrive() {
-    asm("wgmma.fence.sync.aligned;\n\t"
-        "fence.proxy.async;");
+    // the wgmma fence is required
+    // 1. before the first wgmma.mma_async instruction in a warpgroup
+    // 2. between a register access and wgmma.mma_async instruction that uses the same registers
+    // this applies to the accumulator fragment and A matrix when in registers. Not required when all wgmma.mma_async
+    // instructions use the same matrix shape
+    asm("wgmma.fence.sync.aligned;");
   }
 
   inline __device__ void commit() {
     asm("wgmma.commit_group.sync.aligned;");
   }
 
-  template<unsigned N>
+  template<unsigned N=0>
   inline __device__ void wait() {
-    static_assert(0 < N < 8, "N must be between 0 and 7");
+    // N is the amount of wgmma instruction that is still allowed to be pending
     asm("wgmma.wait_group.sync.aligned %0;" :: "n"(N));
   }
 
