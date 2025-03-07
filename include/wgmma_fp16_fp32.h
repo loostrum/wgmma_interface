@@ -87,7 +87,7 @@ namespace wgmma {
   }
 
   inline __device__ unsigned long make_descriptor(const fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const unsigned swizzle_mode) {
-    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return;
+    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return 0;
 
     const unsigned long addr = reinterpret_cast<unsigned long>(&frag.x[0]);
     const unsigned lds = 128 * 8 * 2; // sizeof(half) * N * core matrix rows (or cols?)
