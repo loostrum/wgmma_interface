@@ -86,4 +86,23 @@ namespace wgmma {
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
   }
 
+  inline __device__ unsigned long make_descriptor(const fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const unsigned swizzle_mode) {
+    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return;
+
+    const unsigned long addr = reinterpret_cast<unsigned long>(&frag.x[0]);
+    const unsigned lds = 128 * 8 * 2; // sizeof(half) * N * core matrix rows (or cols?)
+    const unsigned sds = 8 * 8 * 2; // core matrix rows * cols * sizeof(half)
+    const unsigned base_offset = 0;
+
+
+    Descriptor desc;
+    desc.bits.start_address = (addr & 0x3FFFF) >> 4;
+    desc.bits.leading_dimension_byte_offset = (lds & 0x3FFFF) >> 4;
+    desc.bits.stride_dimension_byte_offset = (sds & 0x3FFFF) >> 4;
+    desc.bits.matrix_base_offset = base_offset & 0x7;
+    desc.bits.swizzle_mode = swizzle_mode & 0x3;
+
+    return desc.descriptor;
+  }
+
 }  // end namespace wgmma

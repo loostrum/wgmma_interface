@@ -38,13 +38,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     __syncthreads();
     wgmma::smem_fence();
 
-    unsigned lds = 2 * N_WGMMA * 8; // 2048
-    unsigned sds = 128;
-
-    unsigned base_offset = 0;
-    unsigned long addr = reinterpret_cast<unsigned long>(&b.x[0]);
-
-    unsigned long descB = wgmma::make_descriptor(addr, lds, sds, base_offset, swizzle);
+    unsigned long descB = wgmma::make_descriptor(b, swizzle);
 
     wgmma::arrive();
     wgmma::mma_async(a, descB, c);
