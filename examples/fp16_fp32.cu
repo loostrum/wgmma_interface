@@ -7,7 +7,7 @@
 
 #include "wgmma.h"
 
-__global__ void kernel_ref(const half *A, const half *B, float *C, const size_t M, const size_t N, const size_t K, const size_t multiplier) {
+__global__ void kernel_ref(const half *A, const half *B, float *C, const size_t M, const size_t N, const size_t K) {
     size_t m = threadIdx.x + blockIdx.x * blockDim.x;
     size_t n = threadIdx.y + blockIdx.y * blockDim.y;
     if (m >= M | n >= N) {
@@ -18,10 +18,10 @@ __global__ void kernel_ref(const half *A, const half *B, float *C, const size_t 
     for (int k=0; k < K; k++) {
       sum += static_cast<float>(A[m * K + k]) * static_cast<float>(B[n * K + k]);
     }
-    C[m * N + n] = sum * multiplier;
+    C[m * N + n] = sum;
 }
 
-template<size_t M, size_t N, size_t K, size_t REPEAT_COUNT=1, size_t WGMMA_COUNT=1>
+template<size_t M, size_t N, size_t K>
 __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     const size_t nthreads = blockDim.x * blockDim.y * blockDim.z;
     const size_t tid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
@@ -39,16 +39,10 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     wgmma::smem_fence();
 
     unsigned long descB = wgmma::make_descriptor(b, swizzle);
-
-    for (size_t repeat=0; repeat < REPEAT_COUNT; repeat++) {
-        wgmma::arrive();
-        for (size_t counter = 0; counter < WGMMA_COUNT; counter++) {
-            wgmma::mma_async(a, descB, c);
-        }
-        wgmma::commit();
-        wgmma::wait();
-    }
-
+    wgmma::arrive();
+    wgmma::mma_async(a, descB, c);
+    wgmma::commit();
+    wgmma::wait();
     wgmma::store_matrix(c, C, N, wgmma::mem_row_major);
 }
 
@@ -57,8 +51,6 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 8;
-    constexpr unsigned WGMMA_COUNT = 4;
     constexpr unsigned ITERATIONS = 4;
 
     cu::init();
@@ -100,14 +92,14 @@ int main() {
 
     cudaMemcpy(d_a, a, bytes_a, cudaMemcpyHostToDevice);
     cudaMemcpy(d_b, b, bytes_b, cudaMemcpyHostToDevice);
-    kernel_ref<<<grid_ref, threads_ref>>>(d_a, d_b, d_c, M, N, K, REPEAT_COUNT * WGMMA_COUNT);
+    kernel_ref<<<grid_ref, threads_ref>>>(d_a, d_b, d_c, M, N, K);
     cudaDeviceSynchronize();
     cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
     dim3 threads{128, 1, 1};
     dim3 grid{1, 1, 1};
     cudaMemset(d_c, 0, bytes_c);
-    kernel_wgmma<M, N, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+    kernel_wgmma<M, N, K><<<grid, threads>>>(d_a, d_b, d_c);
     cudaDeviceSynchronize();
     cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
@@ -127,12 +119,12 @@ int main() {
     int nr_thread_blocks = multiProcessorCount * 512;
     dim3 grid_bench(nr_thread_blocks);
     dim3 threads_bench(128);
-    double gops = 1e-9 * 2 * M * N * K * WGMMA_COUNT * REPEAT_COUNT * nr_thread_blocks;
+    double gops = 1e-9 * 2 * M * N * K * nr_thread_blocks;
     std::array<double, ITERATIONS> tflops;
     cu::Event start, end;
     for (size_t i=0; i < ITERATIONS; i++) {
         stream.record(start);
-        kernel_wgmma<M, N, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+        kernel_wgmma<M, N, K><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
         stream.record(end);
         end.synchronize();
         stream.synchronize();
