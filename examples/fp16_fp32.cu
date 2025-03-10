@@ -57,8 +57,8 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 256;
-    constexpr unsigned WGMMA_COUNT = 8;
+    constexpr unsigned REPEAT_COUNT = 8;
+    constexpr unsigned WGMMA_COUNT = 4;
     constexpr unsigned ITERATIONS = 4;
 
     cu::init();
