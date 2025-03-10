@@ -21,20 +21,22 @@ __global__ void kernel_ref(const half *A, const half *B, float *C, const size_t 
     C[m * N + n] = sum;
 }
 
-template<size_t M, size_t N, size_t K>
+template<size_t M_PER_BLOCK, size_t N_PER_BLOCK,
+          size_t M_PER_WG, size_t N_PER_WG,
+          size_t M_WGMMA, size_t N_WGMMA, size_t K_WGMMA>
 __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     const size_t nthreads = blockDim.x * blockDim.y * blockDim.z;
     const size_t tid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
 
-    wgmma::fragment<wgmma::matrix_a, M, N, K, half, wgmma::row_major> a;
-    __shared__ __align__(16) wgmma::fragment<wgmma::matrix_b, M, N, K, half, wgmma::col_major> b;
-    wgmma::fragment<wgmma::accumulator, M, N, K, float> c;
+    wgmma::fragment<wgmma::matrix_a, M_WGMMA, N_WGMMA, K_WGMMA, half, wgmma::row_major> a;
+    __shared__ __align__(16) wgmma::fragment<wgmma::matrix_b, M_WGMMA, N_WGMMA, K_WGMMA, half, wgmma::col_major> b;
+    wgmma::fragment<wgmma::accumulator, M_WGMMA, N_WGMMA, K_WGMMA, float> c;
     wgmma::fill_fragment(c, 0);
 
     wgmma::SwizzleMode swizzle = wgmma::SwizzleMode::Interleaved;
 
-    wgmma::load_matrix(a, A, K);
-    wgmma::load_matrix(b, B, K, swizzle, tid, nthreads);
+    wgmma::load_matrix(a, A, K_WGMMA);
+    wgmma::load_matrix(b, B, K_WGMMA, swizzle, tid, nthreads);
     __syncthreads();
     wgmma::smem_fence();
 
@@ -43,15 +45,27 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
     wgmma::mma_async(a, descB, c);
     wgmma::commit();
     wgmma::wait();
-    wgmma::store_matrix(c, C, N, wgmma::mem_row_major);
+    wgmma::store_matrix(c, C, N_WGMMA, wgmma::mem_row_major);
 }
 
 
 int main() {
+    //constexpr unsigned M = 256;
+    //constexpr unsigned N = 256;
+    //constexpr unsigned K = 256;
     constexpr unsigned M = 64;
     constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned ITERATIONS = 4;
+
+    constexpr unsigned M_PER_BLOCK = M;
+    constexpr unsigned N_PER_BLOCK = N;
+
+    constexpr unsigned M_PER_WG = M;
+    constexpr unsigned N_PER_WG = N;
+
+    constexpr unsigned M_WGMMA = 64;
+    constexpr unsigned N_WGMMA = 128;
+    constexpr unsigned K_WGMMA = 16;
 
     cu::init();
     cu::Device device(0);
@@ -96,10 +110,10 @@ int main() {
     cudaDeviceSynchronize();
     cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
-    dim3 threads{128, 1, 1};
-    dim3 grid{1, 1, 1};
+    dim3 threads{128, N_PER_BLOCK/N_PER_WG, M_PER_BLOCK/M_PER_WG};
+    dim3 grid{N/N_PER_BLOCK, M/M_PER_BLOCK, 1};
     cudaMemset(d_c, 0, bytes_c);
-    kernel_wgmma<M, N, K><<<grid, threads>>>(d_a, d_b, d_c);
+    kernel_wgmma<M_PER_BLOCK, N_PER_BLOCK, M_PER_WG, N_PER_WG, M_WGMMA, N_WGMMA, K_WGMMA><<<grid, threads>>>(d_a, d_b, d_c);
     cudaDeviceSynchronize();
     cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
@@ -120,30 +134,15 @@ int main() {
     dim3 grid_bench(nr_thread_blocks);
     dim3 threads_bench(128);
     double gops = 1e-9 * 2 * M * N * K * nr_thread_blocks;
-    std::array<double, ITERATIONS> tflops;
     cu::Event start, end;
-    for (size_t i=0; i < ITERATIONS; i++) {
-        stream.record(start);
-        kernel_wgmma<M, N, K><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
-        stream.record(end);
-        end.synchronize();
-        stream.synchronize();
-        float time = end.elapsedTime(start);
-        double perf = gops / time; // time in ms converts giga to tera
-        tflops[i] = perf;
-        std::cout << "TFLOPS: " << perf << std::endl;
-    }
-    double tflops_avg = 0;
-    double tflops_sq = 0;
-    for (auto & item : tflops) {
-        tflops_avg += item;
-        tflops_sq += item * item;
-    }
-    tflops_avg /= ITERATIONS;
-    tflops_sq /= ITERATIONS;
-    // stddev = mean of sq - sq of mean
-    double tflops_stddev = tflops_sq - tflops_avg * tflops_avg;
-    std::cout << "Average TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl;
+    stream.record(start);
+    kernel_wgmma<M_PER_BLOCK, N_PER_BLOCK, M_PER_WG, N_PER_WG, M_WGMMA, N_WGMMA, K_WGMMA><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+    stream.record(end);
+    end.synchronize();
+    stream.synchronize();
+    float time = end.elapsedTime(start);
+    double tflops = gops / time; // time in ms converts giga to tera
+    std::cout << "TFLOPS: " << tflops << std::endl;
 
     cudaFreeHost(a);
     cudaFreeHost(b);
