@@ -60,7 +60,7 @@ int main() {
     constexpr unsigned WGMMA_COUNT = 8;
     constexpr unsigned ITERATIONS = 4;
 
-    constexpr std::array<unsigned, 3> N_values{8, 64, 128};
+    constexpr std::array<unsigned, 4> N_values{8, 64, 128, 256};
     const unsigned maxN = *std::max_element(N_values.begin(), N_values.end());
 
     cu::init();
@@ -122,6 +122,9 @@ int main() {
             case 128:
                 kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
                 break;
+            case 256:
+                kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
         }
         cudaDeviceSynchronize();
         cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
@@ -150,10 +153,16 @@ int main() {
             switch(N) {
                 case 8:
                     kernel_wgmma<M,   8, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
                 case 64:
                     kernel_wgmma<M,  64, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
                 case 128:
                     kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
+                case 256:
+                    kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
             }
             stream.record(end);
             end.synchronize();
