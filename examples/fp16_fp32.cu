@@ -70,14 +70,14 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         __syncthreads();
         wgmma::smem_fence();
 
-        wgmma::arrive();
         for (size_t m = 0; m < M_TILES; m++) {
             for (size_t n = 0; n < N_TILES; n++) {
+                wgmma::arrive();
                 wgmma::mma_async(a[m], descB[n], c[m][n]);
+                wgmma::commit();
+                wgmma::wait();
             }
         }
-        wgmma::commit();
-        wgmma::wait();
     }
 
     for (size_t m = 0; m < M_TILES; m++) {
@@ -91,22 +91,22 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 
 
 int main() {
-    constexpr unsigned M = 64;
-    constexpr unsigned N = 128;
+    constexpr unsigned M = 128;
+    constexpr unsigned N = 256;
     constexpr unsigned K = 16;
     //constexpr unsigned M = 64;
     //constexpr unsigned N = 128;
     //constexpr unsigned K = 16;
 
-    constexpr unsigned M_PER_BLOCK = M;
-    constexpr unsigned N_PER_BLOCK = N;
-
-    constexpr unsigned M_PER_WG = M;
-    constexpr unsigned N_PER_WG = N;
-
     constexpr unsigned M_WGMMA = 64;
     constexpr unsigned N_WGMMA = 128;
     constexpr unsigned K_WGMMA = 16;
+
+    constexpr unsigned M_PER_WG = M_WGMMA;
+    constexpr unsigned N_PER_WG = N_WGMMA;
+
+    constexpr unsigned M_PER_BLOCK = M_PER_WG;
+    constexpr unsigned N_PER_BLOCK = N_PER_WG;
 
     constexpr unsigned M_TILES = M_PER_WG / M_WGMMA;
     constexpr unsigned N_TILES = N_PER_WG / N_WGMMA;

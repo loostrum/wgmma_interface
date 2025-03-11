@@ -55,11 +55,13 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 
 int main() {
     constexpr unsigned M = 64;
-    constexpr unsigned N = 128;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 256;
-    constexpr unsigned WGMMA_COUNT = 8;
+    constexpr unsigned REPEAT_COUNT = 512;
+    constexpr unsigned WGMMA_COUNT = 16;
     constexpr unsigned ITERATIONS = 4;
+
+    constexpr std::array<unsigned, 2> N_values{8, 128};
+    const unsigned maxN = *std::max_element(N_values.begin(), N_values.end());
 
     cu::init();
     cu::Device device(0);
@@ -70,8 +72,8 @@ int main() {
                                std::default_random_engine());
 
     size_t bytes_a = sizeof(half) * M * K;
-    size_t bytes_b = sizeof(half) * N * K;
-    size_t bytes_c = sizeof(float) * M * N;
+    size_t bytes_b = sizeof(half) * maxN * K;
+    size_t bytes_c = sizeof(float) * M * maxN;
 
     half *a, *b;
     float *c, *c_ref, *c_ref_host;
@@ -91,67 +93,82 @@ int main() {
         a[i] = (half)generator();
     }
 
-    for (size_t i = 0; i < N * K; i++) {
+    for (size_t i = 0; i < maxN * K; i++) {
         b[i] = (half)generator();
     }
 
-    dim3 threads_ref{32, 32, 1};
-    dim3 grid_ref{M / threads_ref.x + 1, N / threads_ref.y + 1, 1};
+    for (const unsigned &N : N_values) {
+        std::cout << "MxNxK  = " << M << "x" << N << "x" << K << std::endl;
+        dim3 threads_ref{32, 32, 1};
+        dim3 grid_ref{M / threads_ref.x + 1, N / threads_ref.y + 1, 1};
 
-    cudaMemcpy(d_a, a, bytes_a, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b, b, bytes_b, cudaMemcpyHostToDevice);
-    kernel_ref<<<grid_ref, threads_ref>>>(d_a, d_b, d_c, M, N, K, REPEAT_COUNT * WGMMA_COUNT);
-    cudaDeviceSynchronize();
-    cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
+        cudaMemcpy(d_a, a, bytes_a, cudaMemcpyHostToDevice);
+        cudaMemcpy(d_b, b, bytes_b, cudaMemcpyHostToDevice);
+        kernel_ref<<<grid_ref, threads_ref>>>(d_a, d_b, d_c, M, N, K, REPEAT_COUNT * WGMMA_COUNT);
+        cudaDeviceSynchronize();
+        cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
-    dim3 threads{128, 1, 1};
-    dim3 grid{1, 1, 1};
-    cudaMemset(d_c, 0, bytes_c);
-    kernel_wgmma<M, N, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
-    cudaDeviceSynchronize();
-    cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
-
-    int errs = 0;
-    for (size_t m=0; m < M; m++) {
-        for (size_t n=0; n < N; n++) {
-            float diff = c[m * N + n] - c_ref[m * N + n];
-            if (diff != 0) errs++;
+        dim3 threads{128, 1, 1};
+        dim3 grid{1, 1, 1};
+        cudaMemset(d_c, 0, bytes_c);
+        switch(N) {
+            case 8:
+                kernel_wgmma<M,   8, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
+            case 128:
+                kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
         }
-    }
-    std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
+        cudaDeviceSynchronize();
+        cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
 
-    // benchmark
-    int multiProcessorCount = device.getAttribute(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
+        int errs = 0;
+        for (size_t m=0; m < M; m++) {
+            for (size_t n=0; n < N; n++) {
+                float diff = c[m * N + n] - c_ref[m * N + n];
+                if (diff != 0) errs++;
+            }
+        }
+        std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
 
-    // Kernel dimensions
-    int nr_thread_blocks = multiProcessorCount * 512;
-    dim3 grid_bench(nr_thread_blocks);
-    dim3 threads_bench(128);
-    double gops = 1e-9 * 2 * M * N * K * WGMMA_COUNT * REPEAT_COUNT * nr_thread_blocks;
-    std::array<double, ITERATIONS> tflops;
-    cu::Event start, end;
-    for (size_t i=0; i < ITERATIONS; i++) {
-        stream.record(start);
-        kernel_wgmma<M, N, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
-        stream.record(end);
-        end.synchronize();
-        stream.synchronize();
-        float time = end.elapsedTime(start);
-        double perf = gops / time; // time in ms converts giga to tera
-        tflops[i] = perf;
-        std::cout << "TFLOPS: " << perf << std::endl;
+        // benchmark
+        int multiProcessorCount = device.getAttribute(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
+
+        // Kernel dimensions
+        int nr_thread_blocks = multiProcessorCount * 512;
+        dim3 grid_bench(nr_thread_blocks);
+        dim3 threads_bench(128);
+        double gops = 1e-9 * 2 * M * N * K * WGMMA_COUNT * REPEAT_COUNT * nr_thread_blocks;
+        std::array<double, ITERATIONS> tflops;
+        cu::Event start, end;
+        for (size_t i=0; i < ITERATIONS; i++) {
+            stream.record(start);
+            switch(N) {
+                case 8:
+                    kernel_wgmma<M,   8, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                case 128:
+                    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+            }
+            stream.record(end);
+            end.synchronize();
+            stream.synchronize();
+            float time = end.elapsedTime(start);
+            double perf = gops / time; // time in ms converts giga to tera
+            tflops[i] = perf;
+            std::cout << "TFLOPS: " << perf << std::endl;
+        }
+        double tflops_avg = 0;
+        double tflops_sq = 0;
+        for (auto & item : tflops) {
+            tflops_avg += item;
+            tflops_sq += item * item;
+        }
+        tflops_avg /= ITERATIONS;
+        tflops_sq /= ITERATIONS;
+        // stddev = mean of sq - sq of mean
+        double tflops_stddev = tflops_sq - tflops_avg * tflops_avg;
+        std::cout << "Average TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl << std::endl;
     }
-    double tflops_avg = 0;
-    double tflops_sq = 0;
-    for (auto & item : tflops) {
-        tflops_avg += item;
-        tflops_sq += item * item;
-    }
-    tflops_avg /= ITERATIONS;
-    tflops_sq /= ITERATIONS;
-    // stddev = mean of sq - sq of mean
-    double tflops_stddev = tflops_sq - tflops_avg * tflops_avg;
-    std::cout << "Average TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl;
 
     cudaFreeHost(a);
     cudaFreeHost(b);

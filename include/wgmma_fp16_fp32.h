@@ -4,13 +4,13 @@
 
 namespace wgmma {
 
-  // 64x128x16
-  template<> class fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> : public Storage<int, 4> {};
-  template<> class fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> : public Storage<half, 128*16 /* N*K */> {};
-  template<> class fragment<wgmma::accumulator, 64, 128, 16, float> : public Storage<float, 64 /* N/2 */> {};
+  // 64xNx16
+  template<unsigned N> class fragment<wgmma::matrix_a, 64, N, 16, half, wgmma::row_major> : public Storage<int, 4> {};
+  template<unsigned N> class fragment<wgmma::matrix_b, 64, N, 16, half, wgmma::col_major> : public Storage<half, N*16 /* N*K */> {};
+  template<unsigned N> class fragment<wgmma::accumulator, 64, N, 16, float> : public Storage<float, N/2> {};
 
 
-  template<> inline __device__ void load_matrix(fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> &frag, const half *A, const size_t ldm) {
+  template<unsigned N> inline __device__ void load_matrix(fragment<wgmma::matrix_a, 64, N, 16, half, wgmma::row_major> &frag, const half *A, const size_t ldm) {
     size_t laneid = threadIdx.x % 128;
     size_t first_row = laneid / 4 + 8 * (laneid / 32);
     size_t first_col = 2 * (laneid % 4);
@@ -26,10 +26,10 @@ namespace wgmma {
     reinterpret_cast<half2 *>(frag.x)[3] = __halves2half2(A[idx], A[idx+1]);
   }
 
-  template<> inline __device__ void load_matrix(fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const half *B, const size_t ldm, const unsigned swizzle_mode, const size_t tid, const size_t nthreads) {
+  template<unsigned N> inline __device__ void load_matrix(fragment<wgmma::matrix_b, 64, N, 16, half, wgmma::col_major> &frag, const half *B, const size_t ldm, const unsigned swizzle_mode, const size_t tid, const size_t nthreads) {
     if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return;
 
-    for (size_t idx=tid; idx < 128*16; idx += nthreads) {
+    for (size_t idx=tid; idx < N*16 /* N*K */; idx += nthreads) {
       const size_t core_matrix_N = 8;
       const size_t core_matrix_K = 8;
       // no swizzle means core matrices have to have adjacent elements
@@ -40,7 +40,7 @@ namespace wgmma {
       // calculate output index. First get index of core matrix
       size_t core_matrix_n = n / core_matrix_N;
       size_t core_matrix_k = k / core_matrix_K;
-      size_t core_matrix_index = core_matrix_k * (128 / core_matrix_N) + core_matrix_n;  // n-major!
+      size_t core_matrix_index = core_matrix_k * (N / core_matrix_N) + core_matrix_n;  // n-major!
       size_t core_matrix_start = core_matrix_index * core_matrix_N * core_matrix_K; // start position of this core matrix
       size_t core_n = n % core_matrix_N;
       size_t core_k = k % core_matrix_K;
@@ -49,12 +49,12 @@ namespace wgmma {
     }
   }
 
-  template<> inline __device__ void store_matrix(const fragment<wgmma::accumulator, 64, 128, 16, float> &c, float *C, const size_t ldm, const unsigned mem_order) {
-    size_t laneid = threadIdx.x % 128;
+  template<unsigned N> inline __device__ void store_matrix(const fragment<wgmma::accumulator, 64, N, 16, float> &c, float *C, const size_t ldm, const unsigned mem_order) {
+    size_t laneid = threadIdx.x % wgmma::WARPGROUP_SIZE;
     size_t first_row = laneid / 4 + 8 * (laneid / 32);
     size_t first_col = 2 * (laneid % 4);
 
-    for (size_t i = 0; i < ldm / 2; i++) {
+    for (size_t i = 0; i < N / 2; i++) {
       size_t row = first_row + 8 * ((i % 4) / 2);
       size_t col = first_col + i % 2 + 8 * (i / 4);
       if (mem_order == wgmma::mem_row_major) {
@@ -64,6 +64,27 @@ namespace wgmma {
       }
     }
   }
+
+  template<unsigned N>
+  inline __device__ unsigned long make_descriptor(const fragment<wgmma::matrix_b, 64, N, 16, half, wgmma::col_major> &frag, const unsigned swizzle_mode) {
+    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return 0;
+
+    const unsigned long addr = reinterpret_cast<unsigned long>(&frag.x[0]);
+    const unsigned lds = N * 8 * 2; // sizeof(half) * N * core matrix rows (or cols?)
+    const unsigned sds = 8 * 8 * 2; // core matrix rows * cols * sizeof(half)
+    const unsigned base_offset = 0;
+
+
+    Descriptor desc;
+    desc.bits.start_address = (addr & 0x3FFFF) >> 4;
+    desc.bits.leading_dimension_byte_offset = (lds & 0x3FFFF) >> 4;
+    desc.bits.stride_dimension_byte_offset = (sds & 0x3FFFF) >> 4;
+    desc.bits.matrix_base_offset = base_offset & 0x7;
+    desc.bits.swizzle_mode = swizzle_mode & 0x3;
+
+    return desc.descriptor;
+  }
+
 
   template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 128, 16, half, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 128, 16, float> &c) {
     constexpr int scaleA = 1;
@@ -86,23 +107,17 @@ namespace wgmma {
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
   }
 
-  inline __device__ unsigned long make_descriptor(const fragment<wgmma::matrix_b, 64, 128, 16, half, wgmma::col_major> &frag, const unsigned swizzle_mode) {
-    if (swizzle_mode != wgmma::SwizzleMode::Interleaved) return 0;
-
-    const unsigned long addr = reinterpret_cast<unsigned long>(&frag.x[0]);
-    const unsigned lds = 128 * 8 * 2; // sizeof(half) * N * core matrix rows (or cols?)
-    const unsigned sds = 8 * 8 * 2; // core matrix rows * cols * sizeof(half)
-    const unsigned base_offset = 0;
-
-
-    Descriptor desc;
-    desc.bits.start_address = (addr & 0x3FFFF) >> 4;
-    desc.bits.leading_dimension_byte_offset = (lds & 0x3FFFF) >> 4;
-    desc.bits.stride_dimension_byte_offset = (sds & 0x3FFFF) >> 4;
-    desc.bits.matrix_base_offset = base_offset & 0x7;
-    desc.bits.swizzle_mode = swizzle_mode & 0x3;
-
-    return desc.descriptor;
+  template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 8, 16, half, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 8, 16, float> &c) {
+    constexpr int scaleA = 1;
+    constexpr int scaleB = 1;
+    constexpr int transB = 0;
+    constexpr int scaleD = 1;
+     asm("{\n\t"
+         ".reg.pred p;\n\t"
+         "setp.ne.b32 p, %12, 0;\n\t"
+         "wgmma.mma_async.sync.aligned.m64n8k16.f32.f16.f16 {%0, %1, %2, %3}, {%4, %5, %6, %7}, %8, p, %9, %10, %11;\n"
+         "}"
+         : "+f"(c.x[0]), "+f"(c.x[1]), "+f"(c.x[2]), "+f"(c.x[3])
+         : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
   }
-
 }  // end namespace wgmma

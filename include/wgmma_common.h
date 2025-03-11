@@ -49,6 +49,9 @@ namespace wgmma {
   template<class FragA, class FragC>
   inline __device__ void mma_async(const FragA &a, const unsigned long descB, FragC &c);
 
+  template<class Frag>
+  inline __device__ unsigned long make_descriptor(const Frag &frag, const unsigned swizzle_mode);
+
   inline __host__ __device__ unsigned long make_descriptor(unsigned long start_address, unsigned leading_dimension_offset, unsigned stride_dimension_offset, unsigned matrix_base_offset, SwizzleMode swizzle_mode) {
     Descriptor desc;
     desc.bits.start_address = (start_address & 0x3FFFF) >> 4;
