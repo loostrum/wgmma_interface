@@ -107,6 +107,23 @@ namespace wgmma {
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
   }
 
+  template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 64, 16, half, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 64, 16, float> &c) {
+    constexpr int scaleA = 1;
+    constexpr int scaleB = 1;
+    constexpr int transB = 0;
+    constexpr int scaleD = 1;
+     asm("{\n\t"
+         ".reg.pred p;\n\t"
+         "setp.ne.b32 p, %40, 0;\n\t"
+         "wgmma.mma_async.sync.aligned.m64n64k16.f32.f16.f16 {%0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31}, {%32, %33, %34, %35}, %36, p, %37, %38, %39;\n"
+         "}"
+         : "+f"(c.x[0]), "+f"(c.x[1]), "+f"(c.x[2]), "+f"(c.x[3]), "+f"(c.x[4]), "+f"(c.x[5]), "+f"(c.x[6]), "+f"(c.x[7]),
+           "+f"(c.x[8]), "+f"(c.x[9]), "+f"(c.x[10]), "+f"(c.x[11]), "+f"(c.x[12]), "+f"(c.x[13]), "+f"(c.x[14]), "+f"(c.x[15]),
+           "+f"(c.x[16]), "+f"(c.x[17]), "+f"(c.x[18]), "+f"(c.x[19]), "+f"(c.x[20]), "+f"(c.x[21]), "+f"(c.x[22]), "+f"(c.x[23]),
+           "+f"(c.x[24]), "+f"(c.x[25]), "+f"(c.x[26]), "+f"(c.x[27]), "+f"(c.x[28]), "+f"(c.x[29]), "+f"(c.x[30]), "+f"(c.x[31])
+         : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
+  }
+
   template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 8, 16, half, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 8, 16, float> &c) {
     constexpr int scaleA = 1;
     constexpr int scaleB = 1;

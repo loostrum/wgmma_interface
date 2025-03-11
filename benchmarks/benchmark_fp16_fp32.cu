@@ -56,11 +56,11 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 int main() {
     constexpr unsigned M = 64;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 512;
-    constexpr unsigned WGMMA_COUNT = 16;
+    constexpr unsigned REPEAT_COUNT = 256;
+    constexpr unsigned WGMMA_COUNT = 8;
     constexpr unsigned ITERATIONS = 4;
 
-    constexpr std::array<unsigned, 2> N_values{8, 128};
+    constexpr std::array<unsigned, 3> N_values{8, 64, 128};
     const unsigned maxN = *std::max_element(N_values.begin(), N_values.end());
 
     cu::init();
@@ -97,8 +97,9 @@ int main() {
         b[i] = (half)generator();
     }
 
+    std::cout << "Performance is average of " << ITERATIONS << " iterations." << std::endl;
     for (const unsigned &N : N_values) {
-        std::cout << "MxNxK  = " << M << "x" << N << "x" << K << std::endl;
+        std::cout << "MxNxK = " << M << "x" << N << "x" << K << std::endl;
         dim3 threads_ref{32, 32, 1};
         dim3 grid_ref{M / threads_ref.x + 1, N / threads_ref.y + 1, 1};
 
@@ -114,6 +115,9 @@ int main() {
         switch(N) {
             case 8:
                 kernel_wgmma<M,   8, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
+            case 64:
+                kernel_wgmma<M,  64, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
                 break;
             case 128:
                 kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
@@ -137,7 +141,7 @@ int main() {
         // Kernel dimensions
         int nr_thread_blocks = multiProcessorCount * 512;
         dim3 grid_bench(nr_thread_blocks);
-        dim3 threads_bench(128);
+        dim3 threads_bench(wgmma::WARPGROUP_SIZE);
         double gops = 1e-9 * 2 * M * N * K * WGMMA_COUNT * REPEAT_COUNT * nr_thread_blocks;
         std::array<double, ITERATIONS> tflops;
         cu::Event start, end;
@@ -146,6 +150,8 @@ int main() {
             switch(N) {
                 case 8:
                     kernel_wgmma<M,   8, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                case 64:
+                    kernel_wgmma<M,  64, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
                 case 128:
                     kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
             }
@@ -153,9 +159,7 @@ int main() {
             end.synchronize();
             stream.synchronize();
             float time = end.elapsedTime(start);
-            double perf = gops / time; // time in ms converts giga to tera
-            tflops[i] = perf;
-            std::cout << "TFLOPS: " << perf << std::endl;
+            tflops[i] = gops / time; // time in ms converts giga to tera
         }
         double tflops_avg = 0;
         double tflops_sq = 0;
@@ -167,7 +171,7 @@ int main() {
         tflops_sq /= ITERATIONS;
         // stddev = mean of sq - sq of mean
         double tflops_stddev = tflops_sq - tflops_avg * tflops_avg;
-        std::cout << "Average TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl << std::endl;
+        std::cout << "TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl << std::endl;
     }
 
     cudaFreeHost(a);
