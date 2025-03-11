@@ -99,11 +99,11 @@ int main() {
     //constexpr unsigned K = 16;
 
     constexpr unsigned M_WGMMA = 64;
-    constexpr unsigned N_WGMMA = 128;
+    constexpr unsigned N_WGMMA = 8;
     constexpr unsigned K_WGMMA = 16;
 
-    constexpr unsigned M_PER_WG = M_WGMMA;
-    constexpr unsigned N_PER_WG = N_WGMMA;
+    constexpr unsigned M_PER_WG = 128;
+    constexpr unsigned N_PER_WG = 128;
 
     constexpr unsigned M_PER_BLOCK = M_PER_WG;
     constexpr unsigned N_PER_BLOCK = N_PER_WG;
