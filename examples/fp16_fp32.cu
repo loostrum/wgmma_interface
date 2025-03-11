@@ -66,7 +66,6 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
             const size_t global_n = blockN * N_PER_BLOCK + wgN * N_PER_WG + n * N_WGMMA;
             wgmma::load_matrix(b[n], &B[global_n * K + k_index], K, swizzle, tid, nthreads);
         }
-
         __syncthreads();
         wgmma::smem_fence();
 
@@ -105,7 +104,7 @@ int main() {
     constexpr unsigned M_PER_WG = 128;
     constexpr unsigned N_PER_WG = 128;
 
-    constexpr unsigned M_PER_BLOCK = M_PER_WG;
+    constexpr unsigned M_PER_BLOCK = 256;
     constexpr unsigned N_PER_BLOCK = N_PER_WG;
 
     constexpr unsigned M_TILES = M_PER_WG / M_WGMMA;
@@ -157,7 +156,7 @@ int main() {
     cudaMemcpy(c_ref, d_c, bytes_c, cudaMemcpyDeviceToHost);
     cudaMemset(d_c, 0, bytes_c);
 
-    dim3 threads{128, N_PER_BLOCK/N_PER_WG, M_PER_BLOCK/M_PER_WG};
+    dim3 threads{wgmma::WARPGROUP_SIZE, N_PER_BLOCK/N_PER_WG, M_PER_BLOCK/M_PER_WG};
     dim3 grid{N/N_PER_BLOCK, M/M_PER_BLOCK, 1};
 
     double gops = 1e-9 * 2 * M * N * K;
