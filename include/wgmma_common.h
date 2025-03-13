@@ -18,6 +18,10 @@ namespace wgmma {
   struct matrix_b {};
   struct accumulator {};
 
+  namespace precision {
+    struct b1 {};
+  }
+
   union Descriptor {
     struct {
       unsigned short start_address : 14, : 2;

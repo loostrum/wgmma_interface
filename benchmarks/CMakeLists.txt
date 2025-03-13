@@ -1,4 +1,4 @@
-set(WGMMA_BENCHMARKS "benchmark_fp16_fp32")
+set(WGMMA_BENCHMARKS "benchmark_fp16_fp32" "benchmark_b1_s32")
 
 foreach(wgmma_example IN LISTS WGMMA_BENCHMARKS)
     add_executable(wgmma_${wgmma_example} ${wgmma_example}.cu)
