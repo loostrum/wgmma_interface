@@ -1,6 +1,7 @@
 #include <iostream>
 #include <functional>
 #include <random>
+#include <cmath>
 
 #include <cudawrappers/cu.hpp>
 #include <cuda_fp16.h>
@@ -178,8 +179,8 @@ int main() {
         }
         tflops_avg /= ITERATIONS;
         tflops_sq /= ITERATIONS;
-        // stddev = mean of sq - sq of mean
-        double tflops_stddev = tflops_sq - tflops_avg * tflops_avg;
+        // stddev = sqrt(mean of sq - sq of mean)
+        double tflops_stddev = std::sqrt(tflops_sq - tflops_avg * tflops_avg);
         std::cout << "TFLOPS: " << tflops_avg << " +/- " << tflops_stddev << std::endl << std::endl;
     }
 

@@ -2,6 +2,7 @@
 #include <functional>
 #include <random>
 #include <limits>
+#include <cmath>
 
 #include <cudawrappers/cu.hpp>
 
@@ -140,43 +141,7 @@ int main() {
                 if (diff != 0) errs++;
             }
         }
-        std::cout << "num errors: " << errs << std::endl;
         std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
-
-        if (false) {
-            std::cout << "A (packed): " << std::endl;
-            for (size_t m=0; m < M; m++) {
-                for (size_t k=0; k < K_packed; k++) {
-                    std::cout << a[m * K_packed + k] << " ";
-                }
-                std::cout << std::endl;
-            }
-
-            std::cout << "B (packed): " << std::endl;
-            for (size_t k=0; k < K_packed; k++) {
-                for (size_t n=0; n < N; n++) {
-                    std::cout << b[n * K_packed + k] << " ";
-                }
-                std::cout << std::endl;
-            }
-
-            std::cout << "Reference:" << std::endl;
-            for (size_t m=0; m < M; m++) {
-                for (size_t n=0; n < N; n++) {
-                    std::cout << c_ref[m * N + n] << " ";
-                }
-                std::cout << std::endl;
-            }
-            std::cout << std::endl;
-
-            std::cout << "WGMMA:" << std::endl;
-            for (size_t m=0; m < M; m++) {
-                for (size_t n=0; n < N; n++) {
-                    std::cout << c[m * N + n] << " ";
-                }
-                std::cout << std::endl;
-            }
-        }
 
         // benchmark
         int multiProcessorCount = device.getAttribute(CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT);
@@ -218,11 +183,9 @@ int main() {
         }
         tops_avg /= ITERATIONS;
         tops_sq /= ITERATIONS;
-        double tops_min = *std::min_element(tops.begin(), tops.end());
-        double tops_max = *std::max_element(tops.begin(), tops.end());
-        // stddev = mean of sq - sq of mean
-        double tops_stddev = tops_sq - tops_avg * tops_avg;
-        std::cout << "TOPS: " << tops_avg << " +/- " << tops_stddev << "(min: " << tops_min << ", max: " << tops_max << ")" << std::endl << std::endl;
+        // stddev = sqrt(mean of sq - sq of mean)
+        double tops_stddev = std::sqrt(tops_sq - tops_avg * tops_avg);
+        std::cout << "TOPS: " << tops_avg << " +/- " << tops_stddev << std::endl << std::endl;
     }
 
     cudaFreeHost(a);
