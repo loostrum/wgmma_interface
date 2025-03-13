@@ -59,10 +59,10 @@ int main() {
     constexpr unsigned M = 64;
     constexpr unsigned K = 256;
     constexpr unsigned REPEAT_COUNT = 256;
-    constexpr unsigned WGMMA_COUNT = 8;
+    constexpr unsigned WGMMA_COUNT = 16;
     constexpr unsigned ITERATIONS = 4;
 
-    constexpr std::array<unsigned, 1> N_values{8};
+    constexpr std::array<unsigned, 2> N_values{8, 256};
     const unsigned maxN = *std::max_element(N_values.begin(), N_values.end());
 
     cu::init();
@@ -126,9 +126,9 @@ int main() {
             //case 128:
             //    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
             //    break;
-            //case 256:
-            //    kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
-            //    break;
+            case 256:
+                kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
         }
         cudaDeviceSynchronize();
         cudaMemcpy(c, d_c, bytes_c, cudaMemcpyDeviceToHost);
@@ -200,9 +200,9 @@ int main() {
                 //case 128:
                 //    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
                 //    break;
-                //case 256:
-                //    kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
-                //    break;
+                case 256:
+                    kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
             }
             stream.record(end);
             end.synchronize();
@@ -218,9 +218,11 @@ int main() {
         }
         tops_avg /= ITERATIONS;
         tops_sq /= ITERATIONS;
+        double tops_min = *std::min_element(tops.begin(), tops.end());
+        double tops_max = *std::max_element(tops.begin(), tops.end());
         // stddev = mean of sq - sq of mean
         double tops_stddev = tops_sq - tops_avg * tops_avg;
-        std::cout << "TOPS: " << tops_avg << " +/- " << tops_stddev << std::endl << std::endl;
+        std::cout << "TOPS: " << tops_avg << " +/- " << tops_stddev << "(min: " << tops_min << ", max: " << tops_max << ")" << std::endl << std::endl;
     }
 
     cudaFreeHost(a);

@@ -56,7 +56,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 int main() {
     constexpr unsigned M = 64;
     constexpr unsigned K = 16;
-    constexpr unsigned REPEAT_COUNT = 256;
+    constexpr unsigned REPEAT_COUNT = 8;
     constexpr unsigned WGMMA_COUNT = 8;
     constexpr unsigned ITERATIONS = 4;
 
