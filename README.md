@@ -12,3 +12,8 @@ make -C build
 After building the project, examples can be found in `build/examples`. These showcase the use of WGMMA on a multiplication of two large matrices.  
 The `build/benchmark` folder contains examples that run many WGMMA instructions but minimal I/O. These are effectively WGMMA performance benchmarks.
 
+## Supported matrix types and shapes
+| precision (in) | precision (out) | M | N | K |
+| -------------  | --------------  | - | - | - |
+| fp16 | fp32    | 64 | 8, 64, 128, 256 | 16  |
+| b1   | s32     | 64 | 8, 64, 128, 256 | 256 |
