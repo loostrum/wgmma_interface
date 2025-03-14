@@ -38,9 +38,11 @@ namespace wgmma {
       // no swizzle means core matrices have to have adjacent elements
       // like the ccglib transpose kernel: tiles are contiguous in memory
       // B matrix is N x K, K major i.e. contiguous in K
-      size_t n = idx / ldm;
-      size_t k = idx % ldm;
+      size_t n = idx / 16;
+      size_t k = idx % 16;
+      size_t global_idx = n * ldm + k;
       // calculate output index. First get index of core matrix
+      // local n,k determined with K = K_WGMMA as opposed to ldm
       size_t core_matrix_n = n / core_matrix_N;
       size_t core_matrix_k = k / core_matrix_K;
       size_t core_matrix_index = core_matrix_k * (N / core_matrix_N) + core_matrix_n;  // n-major!
@@ -48,7 +50,7 @@ namespace wgmma {
       size_t core_n = n % core_matrix_N;
       size_t core_k = k % core_matrix_K;
       size_t out_idx = core_matrix_start + core_n * core_matrix_K + core_k;
-      frag.x[out_idx] = B[idx];
+      frag.x[out_idx] = B[global_idx];
     }
   }
 

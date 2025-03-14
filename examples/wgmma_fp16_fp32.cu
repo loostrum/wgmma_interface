@@ -92,7 +92,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 int main() {
     constexpr unsigned M = 8192;
     constexpr unsigned N = 8192;
-    constexpr unsigned K = 16;
+    constexpr unsigned K = 32;
     //constexpr unsigned M = 64;
     //constexpr unsigned N = 128;
     //constexpr unsigned K = 16;

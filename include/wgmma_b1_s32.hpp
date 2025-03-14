@@ -42,8 +42,9 @@ namespace wgmma {
       // no swizzle means core matrices have to have adjacent elements
       // like the ccglib transpose kernel: tiles are contiguous in memory
       // B matrix is N x K, K major i.e. contiguous in K
-      size_t n = idx / ldm_packed;
-      size_t k = idx % ldm_packed;
+      size_t n = idx / K_packed;
+      size_t k = idx % K_packed;
+      size_t global_idx = n * ldm_packed + k;
       // calculate output index. First get index of core matrix
       size_t core_matrix_n = n / core_matrix_N;
       size_t core_matrix_k = k / core_matrix_K;
@@ -52,7 +53,7 @@ namespace wgmma {
       size_t core_n = n % core_matrix_N;
       size_t core_k = k % core_matrix_K;
       size_t out_idx = core_matrix_start + core_n * core_matrix_K + core_k;
-      frag.x[out_idx] = B[idx];
+      frag.x[out_idx] = B[global_idx];
     }
   }
 
@@ -99,6 +100,20 @@ namespace wgmma {
          "wgmma.mma_async.sync.aligned.m64n8k256.s32.b1.b1.and.popc {%0, %1, %2, %3}, {%4, %5, %6, %7}, %8, p;\n"
          "}"
          : "+r"(c.x[0]), "+r"(c.x[1]), "+r"(c.x[2]), "+r"(c.x[3])
+         : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleD));
+  }
+
+  template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 64, 256, wgmma::precision::b1, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 64, 256, int> &c) {
+    constexpr int scaleD = 1;
+     asm("{\n\t"
+         ".reg.pred p;\n\t"
+         "setp.ne.b32 p, %37, 0;\n\t"
+         "wgmma.mma_async.sync.aligned.m64n64k256.s32.b1.b1.and.popc {%0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31}, {%32, %33, %34, %35}, %36, p;\n"
+         "}"
+         : "+r"(c.x[0]), "+r"(c.x[1]), "+r"(c.x[2]), "+r"(c.x[3]), "+r"(c.x[4]), "+r"(c.x[5]), "+r"(c.x[6]), "+r"(c.x[7]),
+           "+r"(c.x[8]), "+r"(c.x[9]), "+r"(c.x[10]), "+r"(c.x[11]), "+r"(c.x[12]), "+r"(c.x[13]), "+r"(c.x[14]), "+r"(c.x[15]),
+           "+r"(c.x[16]), "+r"(c.x[17]), "+r"(c.x[18]), "+r"(c.x[19]), "+r"(c.x[20]), "+r"(c.x[21]), "+r"(c.x[22]), "+r"(c.x[23]),
+           "+r"(c.x[24]), "+r"(c.x[25]), "+r"(c.x[26]), "+r"(c.x[27]), "+r"(c.x[28]), "+r"(c.x[29]), "+r"(c.x[30]), "+r"(c.x[31])
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleD));
   }
 
