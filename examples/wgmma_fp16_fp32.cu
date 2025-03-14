@@ -5,7 +5,7 @@
 #include <cudawrappers/cu.hpp>
 #include <cuda_fp16.h>
 
-#include "wgmma.h"
+#include "wgmma.hpp"
 
 __global__ void kernel_ref(const half *A, const half *B, float *C, const size_t M, const size_t N, const size_t K) {
     size_t m = threadIdx.x + blockIdx.x * blockDim.x;
@@ -107,17 +107,18 @@ int main() {
     constexpr unsigned M_PER_BLOCK = 256;
     constexpr unsigned N_PER_BLOCK = N_PER_WG;
 
-    constexpr unsigned M_TILES = M_PER_WG / M_WGMMA;
-    constexpr unsigned N_TILES = N_PER_WG / N_WGMMA;
-    constexpr unsigned N_WGMMA_PER_GROUP = M_TILES * N_TILES;
-    std::cout << "Number of WGMMA instructions per async group: " << N_WGMMA_PER_GROUP << std::endl;
+    static_assert(M % M_PER_BLOCK == 0, "M must be multiple of M_PER_BLOCK");
+    static_assert(N % N_PER_BLOCK == 0, "N must be multiple of M_PER_BLOCK");
+    static_assert(M_PER_BLOCK % M_PER_WG == 0, "M_PER_BLOCK must be multiple of M_PER_WG");
+    static_assert(N_PER_BLOCK % N_PER_WG == 0, "N_PER_BLOCK must be multiple of N_PER_WG");
+    static_assert(K % K_WGMMA == 0, "K must be multiple of K_WGMMA");
 
     cu::init();
     cu::Device device(0);
     cu::Context context(CU_CTX_BLOCKING_SYNC, device);
     cu::Stream stream;
 
-    auto generator = std::bind(std::uniform_int_distribution<int>(-10, 10),
+    auto generator = std::bind(std::uniform_real_distribution<float>(-10, 10),
                                std::default_random_engine());
 
     size_t bytes_a = sizeof(half) * M * K;
@@ -175,7 +176,7 @@ int main() {
     for (size_t m=0; m < M; m++) {
         for (size_t n=0; n < N; n++) {
             float diff = c[m * N + n] - c_ref[m * N + n];
-            if (diff != 0) errs++;
+            if (std::abs(diff) > 1e-3) errs++;
         }
     }
     std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;

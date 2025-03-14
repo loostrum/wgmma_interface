@@ -1,6 +1,9 @@
+#ifndef WGMMA_FP16_FP32_H_
+#define WGMMA_FP16_FP32_H_
+
 #include <cuda_fp16.h>
 
-#include "wgmma_common.h"
+#include "wgmma_common.hpp"
 
 namespace wgmma {
 
@@ -165,3 +168,4 @@ namespace wgmma {
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleA), "n"(scaleB), "n"(transB), "n"(scaleD));
   }
 }  // end namespace wgmma
+#endif  // WGMMA_FP16_FP32_H_

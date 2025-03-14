@@ -1,4 +1,7 @@
-#include "wgmma_common.h"
+#ifndef WGMMA_B1_S32_H_
+#define WGMMA_B1_S32_H_
+
+#include "wgmma_common.hpp"
 
 namespace wgmma {
 
@@ -143,3 +146,4 @@ namespace wgmma {
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleD));
   }
 }  // end namespace wgmma
+#endif  // WGMMA_B1_S32_H_

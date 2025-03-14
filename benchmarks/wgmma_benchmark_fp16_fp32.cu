@@ -6,7 +6,7 @@
 #include <cudawrappers/cu.hpp>
 #include <cuda_fp16.h>
 
-#include "wgmma.h"
+#include "wgmma.hpp"
 
 __global__ void kernel_ref(const half *A, const half *B, float *C, const size_t M, const size_t N, const size_t K, const size_t multiplier) {
     size_t m = threadIdx.x + blockIdx.x * blockDim.x;
