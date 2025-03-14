@@ -53,7 +53,7 @@ namespace wgmma {
     }
   }
 
-  template<unsigned N> inline __device__ void store_matrix(const fragment<wgmma::accumulator, 64, N, 256, int> &c, int *C, const size_t ldm, const unsigned mem_order) {
+  template<unsigned N> inline __device__ void store_matrix(int *C, const fragment<wgmma::accumulator, 64, N, 256, int> &c, const size_t ldm, const unsigned mem_order) {
     size_t laneid = threadIdx.x % wgmma::WARPGROUP_SIZE;
     size_t first_row = laneid / 4 + 8 * (laneid / 32);
     size_t first_col = 2 * (laneid % 4);
@@ -78,7 +78,6 @@ namespace wgmma {
     const unsigned sds = 128; // core matrix size in bytes
     const unsigned base_offset = 0;
 
-
     Descriptor desc;
     desc.bits.start_address = (addr & 0x3FFFF) >> 4;
     desc.bits.leading_dimension_byte_offset = (lds & 0x3FFFF) >> 4;
@@ -97,6 +96,24 @@ namespace wgmma {
          "wgmma.mma_async.sync.aligned.m64n8k256.s32.b1.b1.and.popc {%0, %1, %2, %3}, {%4, %5, %6, %7}, %8, p;\n"
          "}"
          : "+r"(c.x[0]), "+r"(c.x[1]), "+r"(c.x[2]), "+r"(c.x[3])
+         : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleD));
+  }
+
+  template<> inline __device__ void mma_async(const fragment<wgmma::matrix_a, 64, 128, 256, wgmma::precision::b1, wgmma::row_major> &a, const unsigned long descB, fragment<wgmma::accumulator, 64, 128, 256, int> &c) {
+    constexpr int scaleD = 1;
+     asm("{\n\t"
+         ".reg.pred p;\n\t"
+         "setp.ne.b32 p, %69, 0;\n\t"
+         "wgmma.mma_async.sync.aligned.m64n128k256.s32.b1.b1.and.popc {%0, %1, %2, %3, %4, %5, %6, %7, %8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20, %21, %22, %23, %24, %25, %26, %27, %28, %29, %30, %31, %32, %33, %34, %35, %36, %37, %38, %39, %40, %41, %42, %43, %44, %45, %46, %47, %48, %49, %50, %51, %52, %53, %54, %55, %56, %57, %58, %59, %60, %61, %62, %63}, {%64, %65, %66, %67}, %68, p;\n"
+         "}"
+         : "+r"(c.x[0]), "+r"(c.x[1]), "+r"(c.x[2]), "+r"(c.x[3]), "+r"(c.x[4]), "+r"(c.x[5]), "+r"(c.x[6]), "+r"(c.x[7]), 
+           "+r"(c.x[8]), "+r"(c.x[9]), "+r"(c.x[10]), "+r"(c.x[11]), "+r"(c.x[12]), "+r"(c.x[13]), "+r"(c.x[14]), "+r"(c.x[15]), 
+           "+r"(c.x[16]), "+r"(c.x[17]), "+r"(c.x[18]), "+r"(c.x[19]), "+r"(c.x[20]), "+r"(c.x[21]), "+r"(c.x[22]), "+r"(c.x[23]), 
+           "+r"(c.x[24]), "+r"(c.x[25]), "+r"(c.x[26]), "+r"(c.x[27]), "+r"(c.x[28]), "+r"(c.x[29]), "+r"(c.x[30]), "+r"(c.x[31]), 
+           "+r"(c.x[32]), "+r"(c.x[33]), "+r"(c.x[34]), "+r"(c.x[35]), "+r"(c.x[36]), "+r"(c.x[37]), "+r"(c.x[38]), "+r"(c.x[39]), 
+           "+r"(c.x[40]), "+r"(c.x[41]), "+r"(c.x[42]), "+r"(c.x[43]), "+r"(c.x[44]), "+r"(c.x[45]), "+r"(c.x[46]), "+r"(c.x[47]), 
+           "+r"(c.x[48]), "+r"(c.x[49]), "+r"(c.x[50]), "+r"(c.x[51]), "+r"(c.x[52]), "+r"(c.x[53]), "+r"(c.x[54]), "+r"(c.x[55]), 
+           "+r"(c.x[56]), "+r"(c.x[57]), "+r"(c.x[58]), "+r"(c.x[59]), "+r"(c.x[60]), "+r"(c.x[61]), "+r"(c.x[62]), "+r"(c.x[63])
          : "r"(a.x[0]), "r"(a.x[1]), "r"(a.x[2]), "r"(a.x[3]), "l"(descB), "n"(scaleD));
   }
 

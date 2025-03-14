@@ -50,7 +50,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         wgmma::wait();
     }
 
-    wgmma::store_matrix(c, C, N, wgmma::mem_row_major);
+    wgmma::store_matrix(C, c, N, wgmma::mem_row_major);
 }
 
 

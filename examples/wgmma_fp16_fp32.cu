@@ -83,7 +83,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
         for (size_t n = 0; n < N_TILES; n++) {
             const size_t global_m = blockM * M_PER_BLOCK + wgM * M_PER_WG + m * M_WGMMA;
             const size_t global_n = blockN * N_PER_BLOCK + wgN * N_PER_WG + n * N_WGMMA;
-            wgmma::store_matrix(c[m][n], &C[global_m * N + global_n], N, wgmma::mem_row_major);
+            wgmma::store_matrix(&C[global_m * N + global_n], c[m][n], N, wgmma::mem_row_major);
         }
     }
 }

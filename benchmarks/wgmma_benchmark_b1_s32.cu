@@ -52,7 +52,7 @@ __global__ void kernel_wgmma(const int *A, const int *B, int *C) {
         wgmma::wait();
     }
 
-    wgmma::store_matrix(c, C, N, wgmma::mem_row_major);
+    wgmma::store_matrix(C, c, N, wgmma::mem_row_major);
 }
 
 
@@ -63,7 +63,7 @@ int main() {
     constexpr unsigned WGMMA_COUNT = 16;
     constexpr unsigned ITERATIONS = 4;
 
-    constexpr std::array<unsigned, 2> N_values{8, 256};
+    constexpr std::array<unsigned, 3> N_values{8, 128, 256};
     const unsigned maxN = *std::max_element(N_values.begin(), N_values.end());
 
     cu::init();
@@ -124,9 +124,9 @@ int main() {
             //case 64:
             //    kernel_wgmma<M,  64, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
             //    break;
-            //case 128:
-            //    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
-            //    break;
+            case 128:
+                kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
+                break;
             case 256:
                 kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid, threads>>>(d_a, d_b, d_c);
                 break;
@@ -162,9 +162,9 @@ int main() {
                 //case 64:
                 //    kernel_wgmma<M,  64, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
                 //    break;
-                //case 128:
-                //    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
-                //    break;
+                case 128:
+                    kernel_wgmma<M, 128, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
+                    break;
                 case 256:
                     kernel_wgmma<M, 256, K, REPEAT_COUNT, WGMMA_COUNT><<<grid_bench, threads_bench, 0, stream>>>(d_a, d_b, d_c);
                     break;
