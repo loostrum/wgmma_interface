@@ -43,6 +43,7 @@ __global__ void kernel_wgmma(const int *A, const int *B, int *C) {
 
     unsigned long descB = wgmma::make_descriptor(b, swizzle);
 
+    #pragma unroll 1
     for (size_t repeat=0; repeat < REPEAT_COUNT; repeat++) {
         wgmma::arrive();
         for (size_t counter = 0; counter < WGMMA_COUNT; counter++) {

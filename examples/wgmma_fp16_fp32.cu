@@ -92,10 +92,7 @@ __global__ void kernel_wgmma(const half *A, const half *B, float *C) {
 int main() {
     constexpr unsigned M = 8192;
     constexpr unsigned N = 8192;
-    constexpr unsigned K = 32;
-    //constexpr unsigned M = 64;
-    //constexpr unsigned N = 128;
-    //constexpr unsigned K = 16;
+    constexpr unsigned K = 8192;
 
     constexpr unsigned M_WGMMA = 64;
     constexpr unsigned N_WGMMA = 8;
@@ -118,7 +115,7 @@ int main() {
     cu::Context context(CU_CTX_BLOCKING_SYNC, device);
     cu::Stream stream;
 
-    auto generator = std::bind(std::uniform_real_distribution<float>(-10, 10),
+    auto generator = std::bind(std::uniform_int_distribution<int>(-10, 10),
                                std::default_random_engine());
 
     size_t bytes_a = sizeof(half) * M * K;
@@ -176,7 +173,7 @@ int main() {
     for (size_t m=0; m < M; m++) {
         for (size_t n=0; n < N; n++) {
             float diff = c[m * N + n] - c_ref[m * N + n];
-            if (std::abs(diff) > 1e-3) errs++;
+            if (diff != 0) errs++;
         }
     }
     std::cout << "Result " << (errs > 0 ? "Not " : "") << "OK" << std::endl;
